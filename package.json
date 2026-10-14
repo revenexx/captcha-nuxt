@@ -1,7 +1,7 @@
 {
   "name": "@revenexx/captcha-nuxt",
   "version": "0.1.1",
-  "description": "One captcha component and one server function for Nuxt, with the provider switched by configuration: the privacy-friendly RevenexxCaptcha (built on Cap), any self-hosted Cap, Friendly Captcha, Cloudflare Turnstile or your own provider. Consent-aware, with a fallback, and optionally configured per tenant by the revenexx platform.",
+  "description": "One captcha component and one server function for Nuxt, with the provider switched by configuration: the privacy-friendly RevenexxCaptcha (built on Cap), any self-hosted Cap, Friendly Captcha, Cloudflare Turnstile, hCaptcha, Google reCAPTCHA v2/v3 or your own provider. Consent-aware, with a fallback, and optionally configured per tenant by the revenexx platform.",
   "keywords": [
     "nuxt",
     "nuxt-module",
@@ -14,6 +14,9 @@
     "friendly-captcha",
     "turnstile",
     "cloudflare-turnstile",
+    "hcaptcha",
+    "recaptcha",
+    "google-recaptcha",
     "gdpr",
     "dsgvo",
     "privacy",

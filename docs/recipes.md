@@ -75,6 +75,44 @@ captcha: {
 Secrets: `NUXT_CAPTCHA_TURNSTILE_SECRET` and `NUXT_CAPTCHA_CAP_SECRET` (for the fallback). The
 route needs nothing extra: it accepts `turnstile` and `revenexx` tokens.
 
+## hCaptcha or reCAPTCHA behind consent
+
+```ts
+modules: ['@nuxt/scripts', '@revenexx/consent-manager-nuxt', '@revenexx/captcha-nuxt'],
+captcha: {
+  provider: 'recaptcha',            // or 'hcaptcha'
+  fallback: 'revenexx',
+  providers: {
+    recaptcha: { siteKey: '6L…', version: 'v3' },   // vendor google-recaptcha
+    hcaptcha: { siteKey: '…' },                      // vendor hcaptcha
+    revenexx: { siteKey: '…' },
+  },
+},
+```
+
+Secrets: `NUXT_CAPTCHA_RECAPTCHA_SECRET` (or `NUXT_CAPTCHA_HCAPTCHA_SECRET`) and
+`NUXT_CAPTCHA_CAP_SECRET` for the fallback. The route stays as it is; with reCAPTCHA v3 it may
+set its own threshold:
+
+```ts
+const result = await verifyCaptcha(event, body.captcha, { action: 'contact', minScore: 0.7 })
+if (result.errors.includes('low_score')) { /* ask for a second factor instead of refusing */ }
+```
+
+## reCAPTCHA v3 without the badge
+
+```ts
+captcha: {
+  provider: 'recaptcha',
+  providers: { recaptcha: { siteKey: '6L…', version: 'v3', hideBadge: true } },
+  labels: { recaptchaNotice: 'This site is protected by reCAPTCHA.' },
+},
+```
+
+Google allows hiding the badge only when the form says the site is protected by reCAPTCHA.
+`<RevenexxCaptcha>` shows `labels.recaptchaNotice` for v3 in any case. With `useCaptcha()` there
+is no component, so write the sentence next to your form yourself.
+
 ## A self-hosted Cap
 
 Run Cap standalone ([docs](https://trycap.dev/guide/standalone/)) with
