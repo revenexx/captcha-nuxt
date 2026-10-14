@@ -5,7 +5,7 @@ where:
   - Every form of a theme that renders <RevenexxCaptcha> or calls useCaptcha()
   - Every server route that calls verifyCaptcha()
   - The route /_captcha/config
-ticket: TBD
+ticket: PE-1007
 updated: 2026-10-14
 ---
 
