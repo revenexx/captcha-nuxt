@@ -1,0 +1,13 @@
+node_modules
+dist
+.nuxt
+.output
+.data
+coverage
+*.log
+.env
+.env.*
+playground/.nuxt
+playground/.output
+test/fixtures/**/.nuxt
+test/fixtures/**/.output

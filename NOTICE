@@ -1,0 +1,22 @@
+@revenexx/captcha-nuxt
+Copyright (c) 2026 revenexx
+
+This product is licensed under the MIT License (see LICENSE).
+
+The `revenexx` and `cap` providers build on Cap, the self-hosted
+proof-of-work CAPTCHA by tiagozip:
+
+  Cap
+  https://github.com/tiagozip/cap
+  Licensed under the Apache License, Version 2.0
+  https://www.apache.org/licenses/LICENSE-2.0
+
+The browser solver is the unmodified npm package `@cap.js/widget`, used
+through its programmatic mode and installed as a dependency; it carries its
+own license file. This package does not show Cap's widget: it draws its own
+box and removes the links Cap places in the hidden solver element. RevenexxCaptcha,
+the service at captcha.revenexx.com, runs Cap standalone.
+
+The `friendly` provider loads the unmodified npm package
+`@friendlycaptcha/sdk` by Friendly Captcha GmbH (MPL-2.0), installed as a
+dependency.

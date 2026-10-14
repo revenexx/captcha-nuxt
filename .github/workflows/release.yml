@@ -1,0 +1,59 @@
+name: Release
+
+# Versions + publishes @revenexx/captcha-nuxt to npm via Changesets.
+# On a push to main with pending changesets, the action opens/updates a
+# "Version Packages" PR; once that PR is merged, it publishes.
+#
+# Publish auth is npm OIDC *trusted publishing* — NO stored token:
+#   - npmjs must have a trusted publisher configured for the package
+#     (repo: revenexx/captcha-nuxt, workflow: release.yml).
+#     https://docs.npmjs.com/trusted-publishers
+#   - needs id-token: write + npm CLI >= 11.5.1 + Node >= 22.14.0.
+#   - the repo is public, so npm attaches provenance automatically.
+#
+# The Version Packages PR is opened under a GitHub App token, not GITHUB_TOKEN:
+# a PR opened or pushed by GITHUB_TOKEN triggers no workflow, so its CI would
+# never run. The release bot (revenexx-release-bot, installed org-wide) mints
+# the token from ORG-level secrets REVENEXX_RELEASEBOT_APP_ID and
+# REVENEXX_RELEASEBOT_APP_PRIVATE_KEY — the same pair revenexx/talkback-js uses;
+# nothing repo-local to set up.
+on:
+  push:
+    branches: [main]
+
+concurrency: release-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.REVENEXX_RELEASEBOT_APP_ID }}
+          private-key: ${{ secrets.REVENEXX_RELEASEBOT_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # OIDC trusted publishing requires npm CLI >= 11.5.1 (newer than the one
+      # bundled with Node 22). pnpm publish shells out to this npm for auth.
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - uses: changesets/action@v1
+        with:
+          # `pnpm run version` (changeset version) — not pnpm's built-in version.
+          version: pnpm run version
+          publish: pnpm run release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
