@@ -194,6 +194,31 @@ describe('<RevenexxCaptcha> with the own box', () => {
   })
 })
 
+describe('<RevenexxCaptcha invisible>', () => {
+  it('runs the challenge on submit of its form, then submits with the token', async () => {
+    const own = controllable()
+    const submitted: string[] = []
+    const Host = defineComponent({
+      render: () => h('form', {
+        onSubmit: (e: Event) => {
+          e.preventDefault()
+          submitted.push((e.target as HTMLFormElement).querySelector<HTMLInputElement>('input[name="captcha"]')!.value)
+        },
+      }, [h(RevenexxCaptcha, { action: 'contact', invisible: true }), h('button', { type: 'submit' }, 'Senden')]),
+    })
+    const wrapper = mount(Host, { global: { provide: { [CAPTCHA_RUNTIME as symbol]: runtime({ own: own.provider }, { provider: 'own' }) } }, attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.find('button[role="checkbox"]').exists()).toBe(false)
+    await wrapper.get('button[type="submit"]').trigger('click')
+    await flushPromises()
+    expect(submitted).toEqual([])
+    own.solve('late')
+    await flushPromises()
+    expect(submitted).toEqual(['rvx1.own.late'])
+    wrapper.unmount()
+  })
+})
+
 describe('consent and fallback', () => {
   const consent = (allowed: string[]): CaptchaConsentSeam & { fire: () => void } => {
     const listeners: Array<() => void> = []
