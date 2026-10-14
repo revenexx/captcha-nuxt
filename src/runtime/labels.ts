@@ -11,6 +11,7 @@ export const DEFAULT_LABELS: CaptchaLabels = {
   consentRequired: 'Diese Prüfung wird erst nach Ihrer Einwilligung geladen.',
   unavailable: 'Die Prüfung ist gerade nicht verfügbar.',
   brand: 'RevenexxCaptcha',
+  recaptchaNotice: 'Diese Website ist durch reCAPTCHA geschützt.',
 }
 
 export function resolveLabels(overrides?: Partial<CaptchaLabels> | null): CaptchaLabels {

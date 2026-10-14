@@ -17,6 +17,8 @@ const CANARIES = {
   NUXT_CAPTCHA_CAP_VERIFY_ENDPOINT: 'https://canary-cap-verify.invalid',
   NUXT_CAPTCHA_FRIENDLY_API_KEY: 'canary-friendly-api-key',
   NUXT_CAPTCHA_TURNSTILE_SECRET: '0x-canary-turnstile-secret',
+  NUXT_CAPTCHA_HCAPTCHA_SECRET: '0x-canary-hcaptcha-secret',
+  NUXT_CAPTCHA_RECAPTCHA_SECRET: 'canary-recaptcha-secret',
 }
 
 async function files(dir: string): Promise<string[]> {
@@ -43,6 +45,8 @@ describe('a production build', () => {
     // The keys exist, empty, so the variables fill them at runtime.
     const server = (await Promise.all(output.filter(f => f.endsWith('.mjs')).map(f => readFile(f, 'utf8')))).join('\n')
     expect(server).toMatch(/"turnstileSecret":\s*""/)
+    expect(server).toMatch(/"hcaptchaSecret":\s*""/)
+    expect(server).toMatch(/"recaptchaSecret":\s*""/)
     expect(server).toMatch(/"riderToken":\s*""/)
   })
 })

@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { acceptedProviders, isProduction, secretsFor, verifyToken } from '../../src/runtime/server/shared'
+import { describe, expect, it, vi } from 'vitest'
+import { acceptedProviders, isProduction, nitroFetch, secretsFor, verifyToken } from '../../src/runtime/server/shared'
 import type { VerifyDeps } from '../../src/runtime/server/shared'
 import cap from '../../src/runtime/providers/cap'
 import revenexx from '../../src/runtime/providers/revenexx'
 import turnstile from '../../src/runtime/providers/turnstile'
+import recaptcha from '../../src/runtime/providers/recaptcha'
 import none from '../../src/runtime/providers/none'
 import test from '../../src/runtime/providers/test'
 import { defineCaptchaProvider } from '../../src/runtime/define'
@@ -100,6 +101,19 @@ describe('verifyToken', () => {
     expect((await verifyToken('rvx1.scored.contact', { action: 'contact', minScore: 0.2 }, d)).success).toBe(true)
   })
 
+  it('hands verifyCaptcha\'s minScore to reCAPTCHA v3, which otherwise applies 0.5 [@spec:module-contract:AC-16]', async () => {
+    const d = (score: number) => deps({
+      config: config({ provider: 'recaptcha', providers: { recaptcha: { siteKey: '6Lv3', version: 'v3' } } }),
+      registry: { ...registry, recaptcha },
+      secrets: { recaptchaSecret: 'rs' },
+      fetch: mockFetch({ status: 200, data: { success: true, score, action: 'contact' } }).fetch,
+    })
+    expect(await verifyToken('rvx1.recaptcha.03AF', { action: 'contact' }, d(0.4))).toEqual({ success: false, provider: 'recaptcha', action: 'contact', score: 0.4, errors: ['low_score'] })
+    expect((await verifyToken('rvx1.recaptcha.03AF', { action: 'contact', minScore: 0.3 }, d(0.4))).success).toBe(true)
+    expect((await verifyToken('rvx1.recaptcha.03AF', { action: 'contact', minScore: 0.7 }, d(0.6))).errors).toEqual(['low_score'])
+    expect((await verifyToken('rvx1.recaptcha.03AF', { action: 'login' }, d(0.9))).errors).toEqual(['action_mismatch'])
+  })
+
   it('turns a throwing provider into provider_unavailable', async () => {
     const broken = defineCaptchaProvider({
       name: 'broken',
@@ -114,12 +128,31 @@ describe('verifyToken', () => {
 
 describe('secrets', () => {
   it('come from the runtime config only, per provider [@spec:module-contract:AC-7]', () => {
-    const runtime = { capSecret: ' sk ', capVerifyEndpoint: 'http://cap:3000', friendlyApiKey: 'fk', turnstileSecret: 'ts', secrets: { mine: { token: 't' } } }
+    const runtime = { capSecret: ' sk ', capVerifyEndpoint: 'http://cap:3000', friendlyApiKey: 'fk', turnstileSecret: 'ts', hcaptchaSecret: 'hs', recaptchaSecret: 'rs', secrets: { mine: { token: 't' } } }
     expect(secretsFor('revenexx', runtime)).toEqual({ secret: 'sk', verifyEndpoint: 'http://cap:3000' })
     expect(secretsFor('cap', runtime)).toEqual({ secret: 'sk', verifyEndpoint: 'http://cap:3000' })
     expect(secretsFor('friendly', runtime)).toEqual({ apiKey: 'fk' })
     expect(secretsFor('turnstile', runtime)).toEqual({ secret: 'ts' })
+    expect(secretsFor('hcaptcha', runtime)).toEqual({ secret: 'hs' })
+    expect(secretsFor('recaptcha', runtime)).toEqual({ secret: 'rs' })
     expect(secretsFor('mine', runtime)).toEqual({ token: 't' })
     expect(secretsFor('turnstile', undefined)).toEqual({ secret: '' })
+  })
+})
+
+describe('nitroFetch', () => {
+  it('sends a form-encoded body for hCaptcha and reCAPTCHA, JSON otherwise [@spec:module-contract:AC-15]', async () => {
+    const raw = vi.fn(async (_url: string, _options: Record<string, unknown>) => ({ status: 200, _data: { success: true } }))
+    vi.stubGlobal('$fetch', { raw })
+    try {
+      const res = await nitroFetch('https://api.hcaptcha.com/siteverify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: { secret: 's&1', response: 'a b' } })
+      expect(res).toEqual({ status: 200, data: { success: true } })
+      expect(raw.mock.calls[0]![1]).toMatchObject({ method: 'POST', body: 'secret=s%261&response=a+b', retry: 0, ignoreResponseError: true })
+      await nitroFetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: { secret: 's' } })
+      expect(raw.mock.calls[1]![1]).toMatchObject({ body: { secret: 's' } })
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

@@ -27,7 +27,7 @@ export interface CaptchaResult {
   errors: CaptchaError[]
 }
 
-export type BuiltinProviderName = 'revenexx' | 'cap' | 'friendly' | 'turnstile' | 'none' | 'test'
+export type BuiltinProviderName = 'revenexx' | 'cap' | 'friendly' | 'turnstile' | 'hcaptcha' | 'recaptcha' | 'none' | 'test'
 
 /** The states of a captcha on the page. */
 export type CaptchaState = 'idle' | 'verifying' | 'done' | 'error' | 'expired'
@@ -48,13 +48,15 @@ export interface CaptchaLabels {
   unavailable: string
   /** The brand line of the revenexx provider. */
   brand: string
+  /** The line reCAPTCHA v3 (and v2 invisible without its badge) shows, as Google's terms ask for. */
+  recaptchaNotice: string
 }
 
 export interface CaptchaProviderMeta {
   /** Whether the provider may only load after consent for its vendor. */
   consent: 'required' | 'none'
-  /** Where verification data is processed: 'eu', 'global', 'self-hosted' or 'local'. */
-  region: 'eu' | 'global' | 'self-hosted' | 'local' | (string & {})
+  /** Where verification data is processed: 'eu', 'us', 'global', 'self-hosted' or 'local'. */
+  region: 'eu' | 'us' | 'global' | 'self-hosted' | 'local' | (string & {})
   /** Whether the provider can run without showing anything (`useCaptcha().execute()`). */
   invisible: boolean
   /** Whether the provider reports a risk score. */
@@ -146,6 +148,8 @@ export interface CaptchaVerifyInput {
   action?: string
   /** The visitor's address, when `forwardIp` is on. */
   remoteip?: string
+  /** The minimum score the route asked for (`verifyCaptcha`'s `minScore`), for providers with their own default threshold. */
+  minScore?: number
 }
 
 export interface CaptchaServer<Options = Record<string, unknown>> {

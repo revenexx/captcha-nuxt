@@ -3,6 +3,8 @@ import cap from '../../src/runtime/providers/cap'
 import revenexx from '../../src/runtime/providers/revenexx'
 import friendly from '../../src/runtime/providers/friendly'
 import turnstile from '../../src/runtime/providers/turnstile'
+import hcaptcha from '../../src/runtime/providers/hcaptcha'
+import recaptcha from '../../src/runtime/providers/recaptcha'
 import none from '../../src/runtime/providers/none'
 import test from '../../src/runtime/providers/test'
 import { mockFetch, serverContext } from './helpers'
@@ -134,6 +136,134 @@ describe('turnstile siteverify', () => {
 
   it('needs consent and binds actions', () => {
     expect(turnstile.meta).toMatchObject({ consent: 'required', action: true, invisible: true, vendor: 'cloudflare-turnstile' })
+  })
+})
+
+describe('hcaptcha siteverify', () => {
+  const options = { siteKey: '10000000-ffff-ffff-ffff-000000000001' }
+
+  it('posts secret, response, remoteip and sitekey form-encoded to api.hcaptcha.com [@spec:module-contract:AC-15]', async () => {
+    const { fetch, calls } = mockFetch({ status: 200, data: { 'success': true, 'challenge_ts': '2026-10-14T10:00:00Z', 'hostname': 'shop.example', 'error-codes': [] } })
+    const result = await hcaptcha.server.verify(serverContext('hcaptcha', options, { secret: 'hs' }, fetch), { token: 'P1_tok', action: 'contact', remoteip: '203.0.113.9' })
+    expect(result).toEqual({ success: true, provider: 'hcaptcha', action: 'contact', errors: [] })
+    expect(calls[0]!.url).toBe('https://api.hcaptcha.com/siteverify')
+    expect(calls[0]!.init).toMatchObject({
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: { secret: 'hs', response: 'P1_tok', remoteip: '203.0.113.9', sitekey: options.siteKey },
+    })
+    const { fetch: bare, calls: bareCalls } = mockFetch({ status: 200, data: { success: true } })
+    await hcaptcha.server.verify(serverContext('hcaptcha', { siteKey: '' }, { secret: 'hs' }, bare), { token: 't' })
+    expect(bareCalls[0]!.init.body).toEqual({ secret: 'hs', response: 't' })
+  })
+
+  it('maps the documented error codes [@spec:module-contract:AC-15]', async () => {
+    const cases: Array<[string, string]> = [
+      ['missing-input-secret', 'misconfigured'],
+      ['invalid-input-secret', 'misconfigured'],
+      ['sitekey-secret-mismatch', 'misconfigured'],
+      ['expired-input-response', 'expired'],
+      ['already-seen-response', 'replayed'],
+      ['missing-input-response', 'invalid'],
+      ['invalid-input-response', 'invalid'],
+      ['bad-request', 'invalid'],
+      ['something-new', 'invalid'],
+    ]
+    for (const [code, error] of cases) {
+      const { fetch } = mockFetch({ status: 200, data: { 'success': false, 'error-codes': [code] } })
+      const result = await hcaptcha.server.verify(serverContext('hcaptcha', options, { secret: 'hs' }, fetch), { token: 'tok' })
+      expect(result, code).toMatchObject({ success: false, provider: 'hcaptcha', errors: [error] })
+    }
+    for (const answer of [new Error('ECONNRESET'), { status: 500 }, { status: 503, data: 'down' }]) {
+      const { fetch } = mockFetch(answer)
+      expect((await hcaptcha.server.verify(serverContext('hcaptcha', options, { secret: 'hs' }, fetch), { token: 'tok' })).errors, JSON.stringify(answer)).toEqual(['provider_unavailable'])
+    }
+  })
+
+  it('answers misconfigured without a call when the secret is missing [@spec:module-contract:AC-15]', async () => {
+    const { fetch } = mockFetch({ status: 200, data: { success: true } })
+    expect((await hcaptcha.server.verify(serverContext('hcaptcha', options, { secret: '' }, fetch), { token: 'x' })).errors).toEqual(['misconfigured'])
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('passes an Enterprise score through, turned into "higher is more human" [@spec:module-contract:AC-15]', async () => {
+    const { fetch } = mockFetch({ status: 200, data: { success: true, score: 0.2, score_reason: ['safe'] } })
+    const result = await hcaptcha.server.verify(serverContext('hcaptcha', options, { secret: 'hs' }, fetch), { token: 'tok' })
+    expect(result.success).toBe(true)
+    expect(result.score).toBeCloseTo(0.8)
+  })
+
+  it('needs consent, runs invisibly, reports no score or action by default', () => {
+    expect(hcaptcha.meta).toMatchObject({ consent: 'required', region: 'us', invisible: true, score: false, action: false, ui: 'widget', vendor: 'hcaptcha' })
+  })
+})
+
+describe('recaptcha siteverify', () => {
+  const v2 = { siteKey: '6Lv2', version: 'v2' as const }
+  const v3 = { siteKey: '6Lv3', version: 'v3' as const }
+
+  it('posts secret, response and remoteip form-encoded to Google [@spec:module-contract:AC-16]', async () => {
+    const { fetch, calls } = mockFetch({ status: 200, data: { success: true, challenge_ts: '2026-10-14T10:00:00Z', hostname: 'shop.example' } })
+    const result = await recaptcha.server.verify(serverContext('recaptcha', v2, { secret: 'rs' }, fetch), { token: '03AF', action: 'contact', remoteip: '203.0.113.9' })
+    expect(result).toEqual({ success: true, provider: 'recaptcha', action: 'contact', errors: [] })
+    expect(calls[0]!.url).toBe('https://www.google.com/recaptcha/api/siteverify')
+    expect(calls[0]!.init).toMatchObject({
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: { secret: 'rs', response: '03AF', remoteip: '203.0.113.9' },
+    })
+  })
+
+  it('maps the documented error codes [@spec:module-contract:AC-16]', async () => {
+    const cases: Array<[string, string]> = [
+      ['missing-input-secret', 'misconfigured'],
+      ['invalid-input-secret', 'misconfigured'],
+      ['timeout-or-duplicate', 'expired'],
+      ['missing-input-response', 'invalid'],
+      ['invalid-input-response', 'invalid'],
+      ['bad-request', 'invalid'],
+    ]
+    for (const [code, error] of cases) {
+      const { fetch } = mockFetch({ status: 200, data: { 'success': false, 'error-codes': [code] } })
+      const result = await recaptcha.server.verify(serverContext('recaptcha', v2, { secret: 'rs' }, fetch), { token: 'tok' })
+      expect(result, code).toMatchObject({ success: false, provider: 'recaptcha', errors: [error] })
+    }
+    for (const answer of [new Error('ETIMEDOUT'), { status: 502 }]) {
+      const { fetch } = mockFetch(answer)
+      expect((await recaptcha.server.verify(serverContext('recaptcha', v2, { secret: 'rs' }, fetch), { token: 'tok' })).errors).toEqual(['provider_unavailable'])
+    }
+    const { fetch } = mockFetch({ status: 200, data: { success: true } })
+    expect((await recaptcha.server.verify(serverContext('recaptcha', v2, { secret: '' }, fetch), { token: 'x' })).errors).toEqual(['misconfigured'])
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('reports v3\'s score and action and refuses a score below 0.5 by default [@spec:module-contract:AC-16]', async () => {
+    const answer = (score: number, action = 'contact') => mockFetch({ status: 200, data: { success: true, score, action, hostname: 'shop.example' } }).fetch
+    expect(await recaptcha.server.verify(serverContext('recaptcha', v3, { secret: 'rs' }, answer(0.9)), { token: 't', action: 'contact' }))
+      .toEqual({ success: true, provider: 'recaptcha', action: 'contact', score: 0.9, errors: [] })
+    expect(await recaptcha.server.verify(serverContext('recaptcha', v3, { secret: 'rs' }, answer(0.5)), { token: 't', action: 'contact' }))
+      .toMatchObject({ success: true, score: 0.5 })
+    expect(await recaptcha.server.verify(serverContext('recaptcha', v3, { secret: 'rs' }, answer(0.3)), { token: 't', action: 'contact' }))
+      .toEqual({ success: false, provider: 'recaptcha', action: 'contact', score: 0.3, errors: ['low_score'] })
+  })
+
+  it('takes the threshold from verifyCaptcha\'s minScore, else the provider option [@spec:module-contract:AC-16]', async () => {
+    const answer = () => mockFetch({ status: 200, data: { success: true, score: 0.6, action: 'contact' } }).fetch
+    expect((await recaptcha.server.verify(serverContext('recaptcha', { ...v3, minScore: 0.7 }, { secret: 'rs' }, answer()), { token: 't' })).errors).toEqual(['low_score'])
+    expect((await recaptcha.server.verify(serverContext('recaptcha', { ...v3, minScore: 0.7 }, { secret: 'rs' }, answer()), { token: 't', minScore: 0.4 })).success).toBe(true)
+    expect((await recaptcha.server.verify(serverContext('recaptcha', v3, { secret: 'rs' }, answer()), { token: 't', minScore: 0.8 })).errors).toEqual(['low_score'])
+  })
+
+  it('refuses a v3 token made for another action [@spec:module-contract:AC-16]', async () => {
+    const { fetch } = mockFetch({ status: 200, data: { success: true, score: 0.9, action: 'login' } })
+    const result = await recaptcha.server.verify(serverContext('recaptcha', v3, { secret: 'rs' }, fetch), { token: 't', action: 'contact' })
+    expect(result).toEqual({ success: false, provider: 'recaptcha', action: 'login', score: 0.9, errors: ['action_mismatch'] })
+    const { fetch: both } = mockFetch({ status: 200, data: { success: true, score: 0.1, action: 'login' } })
+    expect((await recaptcha.server.verify(serverContext('recaptcha', v3, { secret: 'rs' }, both), { token: 't', action: 'contact' })).errors).toEqual(['action_mismatch', 'low_score'])
+  })
+
+  it('needs consent, reports a score and binds the action', () => {
+    expect(recaptcha.meta).toMatchObject({ consent: 'required', region: 'us', invisible: true, score: true, action: true, ui: 'widget', vendor: 'google-recaptcha' })
   })
 })
 

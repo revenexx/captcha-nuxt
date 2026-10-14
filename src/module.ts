@@ -21,7 +21,7 @@ export interface ProviderOptions {
 }
 
 export interface ModuleOptions {
-  /** The provider: `'revenexx'`, `'cap'`, `'friendly'`, `'turnstile'`, `'none'`, `'test'` or the name of a custom one. */
+  /** The provider: `'revenexx'`, `'cap'`, `'friendly'`, `'turnstile'`, `'hcaptcha'`, `'recaptcha'`, `'none'`, `'test'` or the name of a custom one. */
   provider: BuiltinProviderName | (string & {})
   /** `'config'`: provider and site keys from this configuration. `'rider'`: from the revenexx platform at runtime. */
   source: 'config' | 'rider'
@@ -41,14 +41,25 @@ export interface ModuleOptions {
     cap?: { endpoint?: string, siteKey?: string } & ProviderOptions
     friendly?: { siteKey?: string, region?: 'eu' | 'global', language?: string, startMode?: 'focus' | 'auto' | 'none', theme?: 'light' | 'dark' | 'auto' } & ProviderOptions
     turnstile?: { siteKey?: string, theme?: 'auto' | 'light' | 'dark', size?: 'normal' | 'flexible' | 'compact', language?: string } & ProviderOptions
+    hcaptcha?: { siteKey?: string, theme?: 'light' | 'dark', size?: 'normal' | 'compact', language?: string } & ProviderOptions
+    recaptcha?: {
+      siteKey?: string
+      version?: 'v2' | 'v3'
+      theme?: 'light' | 'dark'
+      size?: 'normal' | 'compact'
+      badge?: 'bottomright' | 'bottomleft' | 'inline'
+      hideBadge?: boolean
+      language?: string
+      minScore?: number
+    } & ProviderOptions
     test?: { token?: string, delay?: number } & ProviderOptions
     [name: string]: ProviderOptions | undefined
   }
-  /** Send the visitor's address to the provider (Turnstile `remoteip`, Rider `remoteip`). Default true. */
+  /** Send the visitor's address to the provider (Turnstile, hCaptcha, reCAPTCHA and Rider `remoteip`). Default true. */
   forwardIp: boolean
 }
 
-const BUILTIN: BuiltinProviderName[] = ['revenexx', 'cap', 'friendly', 'turnstile', 'none', 'test']
+const BUILTIN: BuiltinProviderName[] = ['revenexx', 'cap', 'friendly', 'turnstile', 'hcaptcha', 'recaptcha', 'none', 'test']
 const NOT_FOR_PRODUCTION = ['none', 'test']
 
 export default defineNuxtModule<ModuleOptions>({
@@ -68,6 +79,8 @@ export default defineNuxtModule<ModuleOptions>({
       cap: { endpoint: '', siteKey: '' },
       friendly: { siteKey: '', region: 'eu' },
       turnstile: { siteKey: '' },
+      hcaptcha: { siteKey: '' },
+      recaptcha: { siteKey: '', version: 'v2' },
     },
     forwardIp: true,
   },
@@ -75,7 +88,7 @@ export default defineNuxtModule<ModuleOptions>({
     const { resolve } = createResolver(import.meta.url)
     const logger = useLogger('captcha')
 
-    // The script loader Turnstile and custom providers load through.
+    // The script loader Turnstile, hCaptcha, reCAPTCHA and custom providers load through.
     if (!hasNuxtModule('@nuxt/scripts')) await installModule('@nuxt/scripts')
 
     // Every provider the browser or the server may need: the built-ins and the custom files.
@@ -112,6 +125,8 @@ export default defineNuxtModule<ModuleOptions>({
       capVerifyEndpoint: '',
       friendlyApiKey: '',
       turnstileSecret: '',
+      hcaptchaSecret: '',
+      recaptchaSecret: '',
       forwardIp: options.forwardIp,
       secrets: {},
     })

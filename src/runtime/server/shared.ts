@@ -15,6 +15,8 @@ export interface CaptchaPrivateConfig {
   capVerifyEndpoint?: string
   friendlyApiKey?: string
   turnstileSecret?: string
+  hcaptchaSecret?: string
+  recaptchaSecret?: string
   forwardIp?: boolean
   /** Secrets of custom providers: `secrets.<provider>.<key>`. */
   secrets?: Record<string, Record<string, string>>
@@ -35,6 +37,10 @@ export function secretsFor(name: string, config: CaptchaPrivateConfig | undefine
       return { ...custom, apiKey: str(config?.friendlyApiKey) || str(custom.apiKey) }
     case 'turnstile':
       return { ...custom, secret: str(config?.turnstileSecret) || str(custom.secret) }
+    case 'hcaptcha':
+      return { ...custom, secret: str(config?.hcaptchaSecret) || str(custom.secret) }
+    case 'recaptcha':
+      return { ...custom, secret: str(config?.recaptchaSecret) || str(custom.secret) }
     default:
       return custom
   }
@@ -78,13 +84,31 @@ export class TtlCache<T> {
 /** Rider's answer for a site: `GET {rider.url}/api/v1/public/captcha/sites/{site}`. */
 export interface RiderSite {
   site: string
-  provider: 'revenexx' | 'friendly' | 'turnstile'
+  provider: 'revenexx' | 'friendly' | 'turnstile' | 'hcaptcha' | 'recaptcha'
   site_key: string
   fallback: 'revenexx' | null
   revenexx: { endpoint: string, site_key: string }
+  /**
+   * Public options of the provider, merged into `providers.<provider>`: for
+   * recaptcha `{ version: 'v2' | 'v3' }`, else `{}`. Older Rider versions send
+   * none.
+   */
+  options: Record<string, unknown>
 }
 
-const RIDER_PROVIDERS = ['revenexx', 'friendly', 'turnstile']
+const RIDER_PROVIDERS = ['revenexx', 'friendly', 'turnstile', 'hcaptcha', 'recaptcha']
+/** Options Rider may not set: the site key comes from `site_key`, a provider file and consent codes from the shop. */
+const RIDER_RESERVED_OPTIONS = ['siteKey', 'provider', 'consentVendor', 'consentPurpose']
+
+/** Rider's `options`: an object of plain values, or nothing. */
+function riderOptions(value: unknown): Record<string, unknown> {
+  const options: Record<string, unknown> = {}
+  for (const [key, option] of Object.entries(record(value))) {
+    if (RIDER_RESERVED_OPTIONS.includes(key)) continue
+    if (['string', 'number', 'boolean'].includes(typeof option)) options[key] = option
+  }
+  return options
+}
 
 function asRiderSite(data: unknown): RiderSite | null {
   const site = record(record(data).data)
@@ -98,6 +122,7 @@ function asRiderSite(data: unknown): RiderSite | null {
     site_key: site.site_key,
     fallback: (site.fallback ?? null) as RiderSite['fallback'],
     revenexx: { endpoint: String(revenexx.endpoint ?? ''), site_key: String(revenexx.site_key ?? '') },
+    options: riderOptions(site.options),
   }
 }
 
@@ -128,7 +153,7 @@ export function applyRiderSite(config: CaptchaPublicConfig, site: RiderSite): Ca
     endpoint: site.revenexx.endpoint || providers.revenexx?.endpoint,
     siteKey: site.revenexx.site_key || (site.provider === 'revenexx' ? site.site_key : providers.revenexx?.siteKey),
   }
-  if (site.provider !== 'revenexx') providers[site.provider] = { ...providers[site.provider], siteKey: site.site_key }
+  if (site.provider !== 'revenexx') providers[site.provider] = { ...providers[site.provider], ...riderOptions(site.options), siteKey: site.site_key }
   return { ...config, provider: site.provider, fallback: site.fallback ?? false, providers, resolvedFrom: 'rider' }
 }
 
@@ -258,7 +283,7 @@ export async function verifyToken(token: unknown, options: VerifyOptions, deps: 
       fetch: deps.fetch,
       production,
       timeout: deps.timeout ?? DEFAULT_TIMEOUT,
-    }, { token: parsed.raw, action: options.action, remoteip: deps.remoteip })
+    }, { token: parsed.raw, action: options.action, remoteip: deps.remoteip, minScore: options.minScore })
   }
   catch {
     result = fail(parsed.provider, 'provider_unavailable', options.action)
@@ -273,10 +298,15 @@ export async function verifyToken(token: unknown, options: VerifyOptions, deps: 
 export const nitroFetch: CaptchaFetch = async (url, init) => {
   type Raw = (url: string, options: Record<string, unknown>) => Promise<{ status: number, _data?: unknown }>
   const raw = (globalThis as unknown as { $fetch: { raw: Raw } }).$fetch.raw
+  // A form-encoded body (hCaptcha, reCAPTCHA) is encoded here, not left to the fetch library.
+  const form = Object.entries(init.headers ?? {}).some(([k, v]) => k.toLowerCase() === 'content-type' && v.startsWith('application/x-www-form-urlencoded'))
+  const body = form && init.body
+    ? new URLSearchParams(Object.entries(init.body).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => [k, String(v)])).toString()
+    : init.body
   const res = await raw(url, {
     method: init.method ?? 'GET',
     headers: init.headers,
-    body: init.body,
+    body,
     timeout: init.timeout ?? DEFAULT_TIMEOUT,
     retry: 0,
     ignoreResponseError: true,
