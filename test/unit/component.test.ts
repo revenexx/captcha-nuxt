@@ -9,6 +9,8 @@ import { useCaptcha } from '../../src/runtime/composables/useCaptcha'
 import { defineCaptchaProvider } from '../../src/runtime/define'
 import test from '../../src/runtime/providers/test'
 import none from '../../src/runtime/providers/none'
+import hcaptcha from '../../src/runtime/providers/hcaptcha'
+import recaptcha from '../../src/runtime/providers/recaptcha'
 import type { AnyCaptchaProvider, CaptchaConsentSeam, CaptchaPublicConfig, CaptchaWidgetEvents } from '../../src/runtime/types'
 
 /** An own-UI provider whose solve the test controls. */
@@ -282,6 +284,62 @@ describe('consent and fallback', () => {
     const own = controllable('revenexx')
     expect(selectProvider('turnstile', { provider: 'turnstile', source: 'config', fallback: 'revenexx', labels: {}, rider: { url: '', site: '' }, providers: {} }, { turnstile: turnstile.provider, revenexx: own.provider }, null))
       .toEqual({ name: 'turnstile', reason: 'configured' })
+  })
+
+  it('renders the fallback for hCaptcha and reCAPTCHA without consent, and never loads their scripts [@spec:module-contract:AC-10]', async () => {
+    for (const [name, provider, vendor] of [['hcaptcha', hcaptcha, 'hcaptcha'], ['recaptcha', recaptcha, 'google-recaptcha']] as const) {
+      const own = controllable('revenexx')
+      const rt = runtime(
+        { revenexx: own.provider, [name]: provider as AnyCaptchaProvider },
+        { provider: name, fallback: 'revenexx', providers: { [name]: { siteKey: 'k', version: 'v3' } } },
+        consent([`not-${vendor}`]),
+      )
+      const wrapper = mountCaptcha(rt)
+      await flushPromises()
+      expect(rt.loadScript, name).not.toHaveBeenCalled()
+      expect(wrapper.get('.rvx-captcha').attributes('data-captcha-provider')).toBe('revenexx')
+      expect(wrapper.get('.rvx-captcha').attributes('data-captcha-fallback')).toBe('consent')
+      await wrapper.get('button[role="checkbox"]').trigger('click')
+      own.solve('k1:a:b')
+      await flushPromises()
+      expect((wrapper.get('input[type="hidden"]').element as HTMLInputElement).value).toBe('rvx1.revenexx.k1:a:b')
+      wrapper.unmount()
+    }
+  })
+
+  it('gates hCaptcha and reCAPTCHA on their vendors, hcaptcha and google-recaptcha, or the configured one [@spec:module-contract:AC-10]', () => {
+    const own = controllable('revenexx')
+    const registry = { revenexx: own.provider, hcaptcha, recaptcha } as Record<string, AnyCaptchaProvider>
+    const base: CaptchaPublicConfig = { provider: 'hcaptcha', source: 'config', fallback: 'revenexx', labels: {}, rider: { url: '', site: '' }, providers: {} }
+    const allow = (...vendors: string[]): CaptchaConsentSeam => ({ allows: vendor => vendors.includes(vendor) })
+    expect(selectProvider('hcaptcha', base, registry, allow('hcaptcha'))).toEqual({ name: 'hcaptcha', reason: 'configured' })
+    expect(selectProvider('recaptcha', base, registry, allow('google-recaptcha'))).toEqual({ name: 'recaptcha', reason: 'configured' })
+    expect(selectProvider('recaptcha', base, registry, allow('hcaptcha'))).toEqual({ name: 'revenexx', reason: 'consent' })
+    const custom = { ...base, providers: { recaptcha: { consentVendor: 'google' }, hcaptcha: { consentVendor: 'imachines' } } }
+    expect(selectProvider('recaptcha', custom, registry, allow('google'))).toEqual({ name: 'recaptcha', reason: 'configured' })
+    expect(selectProvider('hcaptcha', custom, registry, allow('imachines'))).toEqual({ name: 'hcaptcha', reason: 'configured' })
+    expect(selectProvider('hcaptcha', custom, registry, allow('hcaptcha'))).toEqual({ name: 'revenexx', reason: 'consent' })
+  })
+
+  it('loads reCAPTCHA v3 through the consent-gated script loader once allowed, and shows the notice [@spec:module-contract:AC-18]', async () => {
+    const own = controllable('revenexx')
+    const rt = runtime(
+      { revenexx: own.provider, recaptcha: recaptcha as AnyCaptchaProvider },
+      { provider: 'recaptcha', fallback: 'revenexx', providers: { recaptcha: { siteKey: '6Lv3', version: 'v3' } } },
+      consent(['google-recaptcha']),
+    )
+    rt.loadScript = vi.fn(async () => {
+      (window as unknown as Record<string, unknown>).grecaptcha = { ready: (cb: () => void) => cb(), execute: async () => '03AF_v3' }
+      return undefined
+    })
+    const wrapper = mountCaptcha(rt)
+    await flushPromises()
+    expect(rt.loadScript).toHaveBeenCalledWith('https://www.google.com/recaptcha/api.js?render=6Lv3', expect.objectContaining({ consent: { vendor: 'google-recaptcha' } }))
+    expect(wrapper.find('button[role="checkbox"]').exists()).toBe(false)
+    expect(wrapper.get('[data-captcha-recaptcha-notice]').text()).toBe('Diese Website ist durch reCAPTCHA geschützt.')
+    expect((wrapper.get('input[type="hidden"]').element as HTMLInputElement).value).toBe('rvx1.recaptcha.03AF_v3')
+    wrapper.unmount()
+    delete (window as unknown as Record<string, unknown>).grecaptcha
   })
 
   it('shows a notice when consent is missing and no fallback is configured', async () => {

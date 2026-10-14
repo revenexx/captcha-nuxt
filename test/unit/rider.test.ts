@@ -51,10 +51,26 @@ describe('rider configuration', () => {
     expect(first).toMatchObject({ provider: 'revenexx', resolvedFrom: 'config' })
     const second = await resolvePublicConfig(staticConfig, fetch, cache)
     expect(second).toMatchObject({ provider: 'turnstile', resolvedFrom: 'rider' })
-    const { fetch: broken } = mockFetch({ status: 200, data: { data: { provider: 'recaptcha' } } })
+    const { fetch: broken } = mockFetch({ status: 200, data: { data: { provider: 'unknown-provider', site_key: 'x' } } })
     expect((await resolvePublicConfig(staticConfig, broken, new TtlCache<RiderSite>(60_000))).resolvedFrom).toBe('config')
     const { fetch: down } = mockFetch(new Error('ENOTFOUND'))
     expect((await resolvePublicConfig(staticConfig, down, new TtlCache<RiderSite>(60_000))).provider).toBe('revenexx')
+  })
+
+  it('merges Rider\'s public provider options, which older Rider versions omit [@spec:module-contract:AC-17]', async () => {
+    const v3 = { data: { ...site.data, provider: 'recaptcha', site_key: '6Lv3', options: { version: 'v3' } } }
+    const { fetch } = mockFetch({ status: 200, data: v3 })
+    const withRecaptcha = { ...staticConfig, providers: { ...staticConfig.providers, recaptcha: { siteKey: '', version: 'v2', hideBadge: true } } }
+    const resolved = await resolvePublicConfig(withRecaptcha, fetch, new TtlCache<RiderSite>(60_000))
+    expect(resolved).toMatchObject({ provider: 'recaptcha', resolvedFrom: 'rider', providers: { recaptcha: { siteKey: '6Lv3', version: 'v3', hideBadge: true } } })
+
+    const { fetch: old } = mockFetch({ status: 200, data: { data: { ...site.data, provider: 'hcaptcha', site_key: 'hc-key' } } })
+    const legacy = await resolvePublicConfig(staticConfig, old, new TtlCache<RiderSite>(60_000))
+    expect(legacy).toMatchObject({ provider: 'hcaptcha', resolvedFrom: 'rider', providers: { hcaptcha: { siteKey: 'hc-key' } } })
+
+    // Rider never overrides the site key through options, nor sets anything but plain values.
+    const forged = applyRiderSite(staticConfig, { ...site.data, provider: 'recaptcha', site_key: '6Lv3', options: { siteKey: 'other', provider: '~/x', nested: { a: 1 }, version: 'v3' } } as RiderSite)
+    expect(forged.providers.recaptcha).toEqual({ siteKey: '6Lv3', version: 'v3' })
   })
 
   it('is not asked in config mode', async () => {
@@ -109,6 +125,19 @@ describe('rider verification', () => {
     const { fetch } = mockFetch({ status: 200, data: {} })
     expect((await verifyToken('rvx1.revenexx.x', {}, deps(fetch, ''))).errors).toEqual(['misconfigured'])
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('passes the score Rider reports through, a null score as none [@spec:module-contract:AC-17]', async () => {
+    const { fetch, calls } = mockFetch(
+      { status: 200, data: { data: { success: true, provider: 'recaptcha', action: 'contact', score: 0.9, errors: [] } } },
+      { status: 200, data: { data: { success: false, provider: 'recaptcha', action: 'contact', score: 0.1, errors: ['low_score'] } } },
+      { status: 200, data: { data: { success: true, provider: 'recaptcha', action: 'contact', score: null, errors: [] } } },
+    )
+    const v3 = { ...deps(fetch), config: { ...staticConfig, provider: 'recaptcha', providers: { recaptcha: { siteKey: '6Lv3', version: 'v3' } } } }
+    expect(await verifyToken('rvx1.recaptcha.03AF', { action: 'contact' }, v3)).toEqual({ success: true, provider: 'recaptcha', action: 'contact', score: 0.9, errors: [] })
+    expect(calls[0]!.init.body).toMatchObject({ token: 'rvx1.recaptcha.03AF', action: 'contact' })
+    expect(await verifyToken('rvx1.recaptcha.03AF', { action: 'contact' }, v3)).toEqual({ success: false, provider: 'recaptcha', action: 'contact', score: 0.1, errors: ['low_score'] })
+    expect(await verifyToken('rvx1.recaptcha.03AF', { action: 'contact' }, v3)).toEqual({ success: true, provider: 'recaptcha', action: 'contact', errors: [] })
   })
 
   it('needs no provider secret in the shop [@spec:module-contract:AC-9]', async () => {

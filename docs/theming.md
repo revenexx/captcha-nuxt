@@ -38,6 +38,7 @@ Set them on `.rvx-captcha` or any ancestor. Dark-mode values apply under
 | `.rvx-captcha__brand` | the brand line, for a provider with `meta.brand: true` |
 | `.rvx-captcha__widget` | the container a widget provider renders into |
 | `.rvx-captcha__notice` | consent-required / unavailable notice |
+| `.rvx-captcha__recaptcha-notice` | the reCAPTCHA line (`[data-captcha-recaptcha-notice]`), inside `.rvx-captcha__widget` |
 | `[data-captcha-status]` | the visually hidden live region |
 | `.rvx-captcha-headless` | the container `useCaptcha()` creates for widget providers, at the end of `<body>` |
 

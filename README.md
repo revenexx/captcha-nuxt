@@ -5,8 +5,8 @@
 **One captcha component and one server function for Nuxt. The provider is configuration.**
 `<RevenexxCaptcha>` puts a token into your form, `verifyCaptcha()` checks it on the server, and
 `captcha.provider` decides who does the work: the privacy-friendly RevenexxCaptcha, any
-self-hosted [Cap](https://github.com/tiagozip/cap), Friendly Captcha, Cloudflare Turnstile or a
-provider of your own. Switching providers changes no page and no route.
+self-hosted [Cap](https://github.com/tiagozip/cap), Friendly Captcha, Cloudflare Turnstile,
+hCaptcha, Google reCAPTCHA (v2 and v3) or a provider of your own. Switching providers changes no page and no route.
 
 [![npm version](https://img.shields.io/npm/v/@revenexx/captcha-nuxt?color=2B90B6)](https://www.npmjs.com/package/@revenexx/captcha-nuxt)
 [![npm downloads](https://img.shields.io/npm/dm/@revenexx/captcha-nuxt?color=2B90B6)](https://www.npmjs.com/package/@revenexx/captcha-nuxt)
@@ -30,7 +30,8 @@ provider of your own. Switching providers changes no page and no route.
   server verifies at the provider that actually issued it, also after a fallback, and refuses
   tokens of providers your shop does not use.
 - 🍪 **Consent-aware.** With [`@revenexx/consent-manager-nuxt`](https://github.com/revenexx/consent-manager-nuxt)
-  installed, Turnstile loads only once its vendor is allowed. Until then the fallback renders.
+  installed, Turnstile, hCaptcha and reCAPTCHA load only once their vendor is allowed. Until
+  then the fallback renders.
 - 🔐 **Secrets at runtime only.** Site secrets and API keys are server-only runtime config, read
   from the environment per process. They are never part of `nuxt.config`, the build or the page.
 - 🏢 **Per tenant through the revenexx platform.** With `source: 'rider'`, provider and site keys
@@ -66,7 +67,8 @@ provider of your own. Switching providers changes no page and no route.
 npm i @revenexx/captcha-nuxt @nuxt/scripts     # or pnpm add / yarn add
 ```
 
-`@nuxt/scripts` is a peer dependency: third-party captcha scripts (Turnstile) load through it.
+`@nuxt/scripts` is a peer dependency: third-party captcha scripts (Turnstile, hCaptcha,
+reCAPTCHA) load through it.
 The module installs it for you if it is missing from `modules`.
 
 ## Quick start
@@ -145,7 +147,7 @@ browser ──► provider loads (Cap solver from the Cap instance / SDK / @nuxt
         ──► visitor ticks the box, or useCaptcha().execute() runs it invisibly
         ──► token = rvx1.<provider>.<raw token> → hidden input + v-model
 form post ──► your route ──► verifyCaptcha(event, token, { action })
-                               ├─ config mode: siteverify at <provider> (Cap, Friendly, Turnstile)
+                               ├─ config mode: siteverify at <provider> (Cap, Friendly, Turnstile, hCaptcha, reCAPTCHA)
                                └─ rider mode:  POST Rider /api/v1/public/captcha/verify
                                ▼
                              CaptchaResult { success, provider, action, score?, errors }
@@ -157,7 +159,7 @@ All options go under `captcha` in `nuxt.config.ts`.
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `provider` | `string` | `'revenexx'` | `'revenexx'`, `'cap'`, `'friendly'`, `'turnstile'`, `'none'`, `'test'` or the name of a custom provider. |
+| `provider` | `string` | `'revenexx'` | `'revenexx'`, `'cap'`, `'friendly'`, `'turnstile'`, `'hcaptcha'`, `'recaptcha'`, `'none'`, `'test'` or the name of a custom provider. |
 | `source` | `'config' \| 'rider'` | `'config'` | `'rider'`: provider and site keys come from Rider at runtime, see [Rider mode](#rider-mode). |
 | `fallback` | `string \| false` | `'revenexx'` | Renders instead when the provider lacks consent or its script fails. `false`: no fallback, the box shows a notice. |
 | `labels` | `Partial<CaptchaLabels>` | German texts | Overrides for every visible and announced text, see below. |
@@ -167,10 +169,12 @@ All options go under `captcha` in `nuxt.config.ts`.
 | `providers.cap` | `{ endpoint, siteKey }` | `{ endpoint: '', siteKey: '' }` | Any Cap instance (`endpoint` without the site key, e.g. `https://cap.example.com`). |
 | `providers.friendly` | `{ siteKey, region, language?, startMode?, theme? }` | `{ siteKey: '', region: 'eu' }` | Friendly Captcha v2. `region`: `'eu'` or `'global'`. |
 | `providers.turnstile` | `{ siteKey, theme?, size?, language? }` | `{ siteKey: '' }` | Cloudflare Turnstile. |
+| `providers.hcaptcha` | `{ siteKey, theme?, size?, language? }` | `{ siteKey: '' }` | hCaptcha. `theme`: `'light'` or `'dark'`, `size`: `'normal'` or `'compact'`. |
+| `providers.recaptcha` | `{ siteKey, version?, theme?, size?, badge?, hideBadge?, language?, minScore? }` | `{ siteKey: '', version: 'v2' }` | Google reCAPTCHA. `version`: `'v2'` or `'v3'`; see [reCAPTCHA](#recaptcha-v2-and-v3). |
 | `providers.test` | `{ token?, delay? }` | `{}` | The token the test box hands out (`'pass'`) and a delay in ms. |
 | `providers.<name>` | `{ provider: '~/captcha/my-provider', … }` | | A custom provider file, plus its public options. |
 | `providers.<name>.consentVendor` / `.consentPurpose` | `string` | the provider's | The vendor (and purpose) code in your consent policy. |
-| `forwardIp` | `boolean` | `true` | Send the visitor's address (`getRequestIP(event, { xForwardedFor: true })`) as `remoteip` to Turnstile and Rider. |
+| `forwardIp` | `boolean` | `true` | Send the visitor's address (`getRequestIP(event, { xForwardedFor: true })`) as `remoteip` to Turnstile, hCaptcha, reCAPTCHA and Rider. |
 
 **Labels.** German defaults, each overridable through `captcha.labels`:
 
@@ -185,6 +189,7 @@ All options go under `captcha` in `nuxt.config.ts`.
 | `consentRequired` | Diese Prüfung wird erst nach Ihrer Einwilligung geladen. |
 | `unavailable` | Die Prüfung ist gerade nicht verfügbar. |
 | `brand` | RevenexxCaptcha |
+| `recaptchaNotice` | Diese Website ist durch reCAPTCHA geschützt. (shown by reCAPTCHA v3, and v2 invisible with `hideBadge`) |
 
 For a multilingual shop, render your own box through the [slot](#revenexxcaptcha), which
 receives the labels and leaves the texts to your i18n.
@@ -201,10 +206,12 @@ of the build and never sent to the browser.
 | `NUXT_CAPTCHA_CAP_VERIFY_ENDPOINT` | optional internal URL for Cap's siteverify (e.g. `http://cap.internal:3000`), instead of the public `endpoint` | server |
 | `NUXT_CAPTCHA_FRIENDLY_API_KEY` | Friendly Captcha API key (`X-API-Key`) | server |
 | `NUXT_CAPTCHA_TURNSTILE_SECRET` | Turnstile secret key | server |
+| `NUXT_CAPTCHA_HCAPTCHA_SECRET` | hCaptcha secret key | server |
+| `NUXT_CAPTCHA_RECAPTCHA_SECRET` | reCAPTCHA secret key (v2 or v3, matching the site key) | server |
 | `NUXT_CAPTCHA_RIDER_TOKEN` | the shop's Bearer token for Rider (rider mode) | server |
 | `NUXT_CAPTCHA_FORWARD_IP` | `false` to stop sending `remoteip` | server |
 | `NUXT_PUBLIC_CAPTCHA_PROVIDER`, `NUXT_PUBLIC_CAPTCHA_FALLBACK`, `NUXT_PUBLIC_CAPTCHA_SOURCE` | switch the provider at runtime | public |
-| `NUXT_PUBLIC_CAPTCHA_PROVIDERS_<NAME>_SITE_KEY`, `…_<NAME>_ENDPOINT`, `…_FRIENDLY_REGION` | site keys and endpoints, e.g. `NUXT_PUBLIC_CAPTCHA_PROVIDERS_TURNSTILE_SITE_KEY` | public |
+| `NUXT_PUBLIC_CAPTCHA_PROVIDERS_<NAME>_SITE_KEY`, `…_<NAME>_ENDPOINT`, `…_FRIENDLY_REGION`, `…_RECAPTCHA_VERSION` | site keys and endpoints, e.g. `NUXT_PUBLIC_CAPTCHA_PROVIDERS_TURNSTILE_SITE_KEY` | public |
 | `NUXT_PUBLIC_CAPTCHA_RIDER_URL`, `NUXT_PUBLIC_CAPTCHA_RIDER_SITE` | Rider's URL and the site id | public |
 
 Public values (site keys, endpoints) are fine in `nuxt.config` or in the environment; they end up
@@ -227,7 +234,7 @@ declare the keys empty in `nuxt.config` and fill them with
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `action` | `string` | | The action the server expects. Turnstile binds it into the token; for others it is checked against `verifyCaptcha`'s `action`. |
+| `action` | `string` | | The action the server expects. Turnstile and reCAPTCHA v3 bind it into the token; for others it is checked against `verifyCaptcha`'s `action`. |
 | `v-model` | `string` | `''` | The enveloped token. Cleared on expiry and on error; clearing it resets the captcha. |
 | `provider` | `string` | `captcha.provider` | Use another provider here. The route has to accept it: `verifyCaptcha(event, token, { provider: 'turnstile' })`. |
 | `invisible` | `boolean` | `false` | No box. The challenge runs when the surrounding `<form>` is submitted; the form is submitted again with the token. |
@@ -249,8 +256,8 @@ verifying. A visually hidden `role="status" aria-live="polite"` region announces
 
 **Headless.** The default slot replaces the box and receives
 `{ state, token, provider, progress, labels, execute, reset }`. The hidden input stays.
-Widget providers (Friendly Captcha, Turnstile) render their own widget; the slot is meant for
-the own-box providers.
+Widget providers (Friendly Captcha, Turnstile, hCaptcha, reCAPTCHA) render their own widget; the
+slot is meant for the own-box providers.
 
 ```vue
 <RevenexxCaptcha v-slot="{ state, execute, labels }" v-model="token" action="contact">
@@ -285,8 +292,10 @@ async function subscribe() {
 
 Options: `action`, `provider`. Call it in `setup`. Cap-based providers and Turnstile
 (`execution: 'execute'`, `appearance: 'interaction-only'`) run without UI; Turnstile shows a
-challenge in a small container only if Cloudflare asks for an interaction. Friendly Captcha has
-no invisible mode; its widget renders in that container.
+challenge in a small container only if Cloudflare asks for an interaction. hCaptcha and
+reCAPTCHA v2 run with `size: 'invisible'` and show their challenge only when they ask for one;
+reCAPTCHA v3 never shows one. Friendly Captcha has no invisible mode; its widget renders in that
+container.
 
 ## `verifyCaptcha()` and `CaptchaResult`
 
@@ -294,7 +303,7 @@ no invisible mode; its widget renders in that container.
 verifyCaptcha(event: H3Event, token: unknown, options?: {
   action?: string            // expected action
   provider?: string | string[] // providers accepted in addition to provider + fallback
-  minScore?: number          // refuse a score below this (providers that report one)
+  minScore?: number          // refuse a score below this (providers that report one; reCAPTCHA v3 defaults to 0.5)
 }): Promise<CaptchaResult>
 
 interface CaptchaResult {
@@ -313,10 +322,10 @@ It never throws. Decide on `success`, and use `errors` for logging and messages:
 | --- | --- | --- |
 | `missing` | no token was sent | 422, ask to solve the captcha |
 | `invalid` | unknown, malformed or already used token (Cap, Turnstile), or a provider the shop does not accept | 422 |
-| `expired` | the token expired (Turnstile also reports a reused token this way) | 422, ask to solve again |
-| `replayed` | the provider reports reuse (Friendly Captcha, Rider) | 422 |
+| `expired` | the token expired (Turnstile and reCAPTCHA also report a reused token this way) | 422, ask to solve again |
+| `replayed` | the provider reports reuse (Friendly Captcha, hCaptcha, Rider) | 422 |
 | `action_mismatch` | solved for another action | 422 |
-| `low_score` | below `minScore` | 422 or a second factor |
+| `low_score` | below `minScore` (reCAPTCHA v3: 0.5 unless configured) | 422 or a second factor |
 | `provider_unavailable` | network error, timeout (5 s) or 5xx at the provider or Rider | 503, or let it pass by your own policy |
 | `misconfigured` | missing or wrong secret, site key or Rider token; `none`/`test` in production | 500, fix the configuration |
 
@@ -328,6 +337,8 @@ It never throws. Decide on `success`, and use `errors` for logging and messages:
 | `cap` | own box | none | self-hosted | ✓ | — | — | `NUXT_CAPTCHA_CAP_SECRET` |
 | `friendly` | Friendly Captcha widget | none | EU (`region: 'eu'`) or global | — | — | — | `NUXT_CAPTCHA_FRIENDLY_API_KEY` |
 | `turnstile` | Turnstile widget | **required** (`cloudflare-turnstile`) | global (Cloudflare) | ✓ | — | ✓ | `NUXT_CAPTCHA_TURNSTILE_SECRET` |
+| `hcaptcha` | hCaptcha widget | **required** (`hcaptcha`) | US (Intuition Machines) | ✓ | Enterprise only | — | `NUXT_CAPTCHA_HCAPTCHA_SECRET` |
+| `recaptcha` | v2: reCAPTCHA checkbox; v3: a notice line, no box | **required** (`google-recaptcha`) | US (Google) | ✓ | v3 | v3 | `NUXT_CAPTCHA_RECAPTCHA_SECRET` |
 | `none` | nothing | none | local | ✓ | — | — | never in production |
 | `test` | own box | none | local | ✓ | — | — | never in production |
 
@@ -351,6 +362,58 @@ through `@nuxt/scripts`, rendered explicitly with `action`. The server posts `se
 `response`, `remoteip` (when `forwardIp`) and an idempotency key to Cloudflare's siteverify and
 refuses a token solved for another action. Cloudflare limits `action` to 32 characters of
 letters, digits, `_` and `-`.
+
+**hcaptcha.** `https://js.hcaptcha.com/1/api.js?render=explicit`, loaded through `@nuxt/scripts`
+with `recaptchacompat=off` (so it never defines `window.grecaptcha`) and an `onload` callback the
+module waits for, as hCaptcha asks. Rendered explicitly; invisible with `size: 'invisible'` and
+`hcaptcha.execute()`. The server posts `secret`, `response`, `remoteip` (when `forwardIp`) and
+`sitekey` form-encoded to `https://api.hcaptcha.com/siteverify`. A token is valid for 120 s and
+once (`already-seen-response` is `replayed`). hCaptcha binds no action. Only hCaptcha Enterprise
+reports a score, which rates *malicious* activity; the module reports it inverted
+(`1 - score`), so `score` means "more human" for every provider and `minScore` works the same.
+hCaptcha processes in the US: it needs consent, and your privacy notice has to name it.
+
+### reCAPTCHA v2 and v3
+
+```ts
+captcha: {
+  provider: 'recaptcha',
+  providers: { recaptcha: { siteKey: '6L…', version: 'v3', minScore: 0.5 } },
+},
+```
+
+- **v2** (`version: 'v2'`, the default) is the "I'm not a robot" checkbox, from
+  `https://www.google.com/recaptcha/api.js?render=explicit` and `grecaptcha.render()`. With
+  `<RevenexxCaptcha invisible>` or `useCaptcha()` it renders with `size: 'invisible'` and runs on
+  `grecaptcha.execute(widgetId)`; Google shows a challenge only when it doubts. `theme`, `size`
+  and `badge` (`'bottomright'`, `'bottomleft'`, `'inline'`, invisible only) pass through.
+- **v3** (`version: 'v3'`) has no challenge at all: `api.js?render=<siteKey>` scores every
+  request between 0.0 (likely a bot) and 1.0 (likely human), and `grecaptcha.execute(siteKey,
+  { action })` hands out a token for an action. The component renders no box, only the line
+  `labels.recaptchaNotice`; shown on the page, it fetches a token at once and renews it every
+  90 s, because a v3 token expires after two minutes. With `invisible` or `useCaptcha()` it asks
+  Google only when the form is sent, which Google recommends for the best score. The server
+  refuses a score below `minScore` (default 0.5, Google's own suggestion; `verifyCaptcha(…, {
+  minScore })` wins) as `low_score` and a token made for another action as `action_mismatch`.
+  Google allows only letters, digits, `/` and `_` in an action, so name your actions that way.
+- A v2 and a v3 site key are different keys with different secrets; `version` has to match the
+  key. In rider mode Rider sends the version with the site key.
+- **The badge.** v3 and invisible v2 show Google's reCAPTCHA badge in a corner of the page. It
+  stays visible by default. `hideBadge: true` hides it with the rule Google prescribes
+  (`.grecaptcha-badge { visibility: hidden; }`), which Google allows **only** if the user flow
+  visibly says that the site is protected by reCAPTCHA
+  ([FAQ](https://developers.google.com/recaptcha/docs/faq)). The component then shows
+  `labels.recaptchaNotice` next to the form (v3 always shows it); with `useCaptcha()` there is no
+  component, so put that sentence near your form yourself.
+- **Consent and data.** reCAPTCHA runs on Google's servers in the US and sets the `_GRECAPTCHA`
+  cookie. The provider needs consent (vendor `google-recaptcha`); without it the fallback renders.
+  Mention reCAPTCHA in your privacy notice.
+- **reCAPTCHA Enterprise** is Google Cloud's paid version with its own API
+  (`recaptchaenterprise.googleapis.com` assessments, `enterprise.js`, a Cloud project and API
+  key). It is not supported yet; this provider uses the classic keys and
+  `https://www.google.com/recaptcha/api/siteverify`. Use a v2 or v3 key from the reCAPTCHA admin
+  console (`https://www.google.com/recaptcha/admin`) that accepts that endpoint, not a key that
+  only works through the Enterprise API.
 
 **none / test.** `none` accepts everything; `test` accepts `pass` and refuses `fail`. Both
 refuse every token as `misconfigured` when the server runs with `NODE_ENV=production`, decided
@@ -423,15 +486,16 @@ The built-in providers are written exactly this way (see `src/runtime/providers/
 
 ## Consent and fallback
 
-A provider with `meta.consent: 'required'` (Turnstile, or your own) asks before it loads:
+A provider with `meta.consent: 'required'` (Turnstile, hCaptcha, reCAPTCHA, or your own) asks
+before it loads:
 
 - **With [`@revenexx/consent-manager-nuxt`](https://github.com/revenexx/consent-manager-nuxt)
   installed**, the module asks its `$consentProvider.allows(vendor, purpose)`. The vendor is
-  `cloudflare-turnstile` for Turnstile (override with `providers.turnstile.consentVendor` /
-  `consentPurpose` to match your policy's codes). Without consent, the **fallback** renders
-  instead (RevenexxCaptcha by default), its token carries `rvx1.revenexx.…`, and the server
-  verifies it there. The Turnstile script is also loaded through the consent manager's
-  `@nuxt/scripts` trigger. When the visitor allows the vendor later, the box switches to the
+  `cloudflare-turnstile` for Turnstile, `hcaptcha` for hCaptcha and `google-recaptcha` for
+  reCAPTCHA (override with `providers.<name>.consentVendor` / `consentPurpose` to match your
+  policy's codes). Without consent, the **fallback** renders instead (RevenexxCaptcha by
+  default), its token carries `rvx1.revenexx.…`, and the server verifies it there. The
+  provider's script is also loaded through the consent manager's `@nuxt/scripts` trigger. When the visitor allows the vendor later, the box switches to the
   provider unless it was already solved.
 - **Without the consent module**, such providers load directly. Your theme owns consent then:
   render the component only once your own consent solution allows the vendor, or pick a
@@ -461,14 +525,17 @@ NUXT_CAPTCHA_RIDER_TOKEN=<the shop's Rider token>
 
 - **Configuration.** During SSR the server reads
   `GET {rider.url}/api/v1/public/captcha/sites/{site}` →
-  `{ data: { site, provider, site_key, fallback, revenexx: { endpoint, site_key } } }`, caches
+  `{ data: { site, provider, site_key, fallback, revenexx: { endpoint, site_key }, options } }`
+  (`options`: the provider's public options, `{ version: 'v2' | 'v3' }` for reCAPTCHA, merged
+  into `providers.<provider>`; older Rider versions omit it), caches
   it per process for 60 s (requests in flight are shared, failures are not cached) and hands it
   to the browser in the payload. The browser never calls Rider. If Rider cannot be reached, the
   static `nuxt.config` configuration applies.
 - **Verification.** `verifyCaptcha()` posts
   `{ token: <full enveloped token>, action?, remoteip? }` to
   `{rider.url}/api/v1/public/captcha/verify` with `Authorization: Bearer <NUXT_CAPTCHA_RIDER_TOKEN>`
-  and returns Rider's `CaptchaResult`. A missing or unknown token (401) is `misconfigured`, a
+  and returns Rider's `CaptchaResult`, including the `score` of reCAPTCHA v3 (Rider applies the
+  threshold). A missing or unknown token (401) is `misconfigured`, a
   network error, timeout (5 s) or 5xx is `provider_unavailable`.
 - `GET /_captcha/config` returns the resolved public configuration, for pages rendered without
   SSR. It holds no secret.
@@ -478,20 +545,22 @@ NUXT_CAPTCHA_RIDER_TOKEN=<the shop's Rider token>
 - **Secrets at runtime only.** The module reads no environment variable while `nuxt build` runs.
   A test builds a fixture with every `NUXT_CAPTCHA_*` secret set to a canary and asserts none of
   them is in `.output`. Do not write secrets into `nuxt.config`.
-- **Replay.** Verify every token on the server, once, before you act on the form. Cap and
-  Turnstile tokens are single-use, and a second verification fails (`invalid` / `expired`).
+- **Replay.** Verify every token on the server, once, before you act on the form. Cap,
+  Turnstile, hCaptcha and reCAPTCHA tokens are single-use, and a second verification fails
+  (`invalid` / `expired` / `replayed`).
   Call `reset()` (or let the component reset) after a submit.
-- **Action binding.** Pass `action` on both sides. Turnstile binds it into the token and a
-  mismatch fails as `action_mismatch`. Cap and Friendly Captcha bind no action; there the action
-  separates your forms in logs and in Rider, not cryptographically.
+- **Action binding.** Pass `action` on both sides. Turnstile and reCAPTCHA v3 bind it into the
+  token and a mismatch fails as `action_mismatch`. Cap, Friendly Captcha, hCaptcha and
+  reCAPTCHA v2 bind no action; there the action separates your forms in logs and in Rider, not
+  cryptographically.
 - **Only your providers.** A token naming a provider the shop does not accept (for example a
   forged `rvx1.none.x`) is `invalid` without any call. `none` and `test` refuse every token in
   production.
 - **Fail closed.** `verifyCaptcha()` returns `success: false` on any doubt, including
   timeouts. Whether you let a form through when the provider is down is your decision; the
   result tells you (`provider_unavailable`).
-- **IP addresses.** With `forwardIp` (default), the visitor's address goes to Turnstile and to
-  Rider as `remoteip`; Cap and Friendly Captcha receive none. Set `forwardIp: false` if your
+- **IP addresses.** With `forwardIp` (default), the visitor's address goes to Turnstile,
+  hCaptcha, reCAPTCHA and Rider as `remoteip`; Cap and Friendly Captcha receive none. Set `forwardIp: false` if your
   privacy notice does not cover it.
 
 ## Theming
@@ -544,15 +613,22 @@ import { defineCaptchaProvider } from '@revenexx/captcha-nuxt' // or the auto-im
   must reach `<endpoint>/<siteKey>/challenge` (CORS) and `<endpoint>/assets/cap_wasm_bg.wasm`
   (`ENABLE_ASSETS_SERVER=true`).
 - **Every verification is `misconfigured`.** The secret is missing in the server's environment
-  (`NUXT_CAPTCHA_CAP_SECRET`, `…_FRIENDLY_API_KEY`, `…_TURNSTILE_SECRET`, or
+  (`NUXT_CAPTCHA_CAP_SECRET`, `…_FRIENDLY_API_KEY`, `…_TURNSTILE_SECRET`, `…_HCAPTCHA_SECRET`,
+  `…_RECAPTCHA_SECRET`, or
   `NUXT_CAPTCHA_RIDER_TOKEN` in rider mode), or you run `none`/`test` with
   `NODE_ENV=production`.
 - **`invalid` for a token that looked fine.** It was verified twice (single use), it names a
   provider your route does not accept (a `:provider` override needs
   `verifyCaptcha(…, { provider })`), or Cap's site key differs from the token's.
-- **Turnstile never appears.** With the consent module installed, its vendor
-  (`cloudflare-turnstile`, or your `consentVendor`) must exist in your published policy and be
-  allowed; until then the fallback renders, which is intended.
+- **Turnstile, hCaptcha or reCAPTCHA never appears.** With the consent module installed, its
+  vendor (`cloudflare-turnstile`, `hcaptcha`, `google-recaptcha`, or your `consentVendor`) must
+  exist in your published policy and be allowed; until then the fallback renders, which is
+  intended.
+- **Every reCAPTCHA v3 verification is `low_score`.** The score is below `minScore` (0.5 by
+  default). Look at the scores your traffic gets in the reCAPTCHA admin console before you lower
+  it. A test key or a `version` that does not match the key gives odd results too.
+- **reCAPTCHA says "Invalid key type".** The site key is a v2 key used with `version: 'v3'` or
+  the other way round, or an Enterprise key; see [reCAPTCHA](#recaptcha-v2-and-v3).
 - **Requests to cdn.jsdelivr.net.** Cap falls back to jsdelivr only when the custom wasm URLs
   are not set, which the module always does, or, for a decompression helper, in browsers without
   `DecompressionStream` (all current browsers have it).
@@ -567,8 +643,9 @@ Apache-2.0. RevenexxCaptcha runs Cap standalone, and the browser solver is Cap's
 `@cap.js/widget`, used unmodified through its programmatic mode. Thank you for Cap. See
 [NOTICE](./NOTICE).
 
-Friendly Captcha's SDK (`@friendlycaptcha/sdk`, MPL-2.0) and Cloudflare Turnstile are used
-through their public APIs.
+Friendly Captcha's SDK (`@friendlycaptcha/sdk`, MPL-2.0), Cloudflare Turnstile, hCaptcha and
+Google reCAPTCHA are used through their public APIs; their scripts are loaded from the providers
+at runtime and are not part of this package.
 
 ## Development and releasing
 

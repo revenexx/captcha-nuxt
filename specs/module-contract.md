@@ -135,3 +135,47 @@ test tagged `@spec:module-contract:AC-n`.
 - **When** the captcha renders
 - **Then** the fallback renders instead, or a notice when there is none
 - verify: unit
+
+### AC-15 — hCaptcha is verified at its siteverify
+
+- **Given** an hCaptcha token
+- **When** the server verifies it
+- **Then** it posts `secret`, `response`, `remoteip` and `sitekey` form-encoded to
+  `https://api.hcaptcha.com/siteverify`, maps `missing-input-secret`, `invalid-input-secret` and
+  `sitekey-secret-mismatch` to `misconfigured`, `expired-input-response` to `expired`,
+  `already-seen-response` to `replayed`, `missing-input-response`, `invalid-input-response` and
+  `bad-request` to `invalid`, a network error or 5xx to `provider_unavailable`, and passes an
+  Enterprise score through as "higher is more human"; in the browser the explicit script loads
+  through `@nuxt/scripts` and runs invisibly with `size: 'invisible'` and `execute`
+- verify: unit
+
+### AC-16 — reCAPTCHA v2 and v3 are verified, v3 with its score and action
+
+- **Given** a reCAPTCHA token, `version: 'v2'` (default) or `'v3'`
+- **When** the server verifies it
+- **Then** it posts `secret`, `response` and `remoteip` form-encoded to
+  `https://www.google.com/recaptcha/api/siteverify` and maps the documented error codes; for v3
+  it reports `score` and `action`, refuses a score below `minScore` (default 0.5, the provider
+  option, `verifyCaptcha`'s `minScore` first) as `low_score` and another action as
+  `action_mismatch`; in the browser v2 renders explicitly (checkbox, or invisible with
+  `execute(widgetId)`) and v3 calls `execute(siteKey, { action })`
+- verify: unit
+
+### AC-17 — Rider's provider options and score reach the shop
+
+- **Given** `source: 'rider'` and a site answer with `options` (for reCAPTCHA `{ version }`)
+- **When** the configuration is resolved and a token is verified
+- **Then** the options are merged into the provider's options (an answer without `options`
+  still works, and Rider cannot replace the site key through them), and the `score` of Rider's
+  result is passed through, `null` as none
+- verify: unit
+
+### AC-18 — reCAPTCHA says the form is protected when its badge does not
+
+- **Given** reCAPTCHA v3, or v2 invisible with `hideBadge: true`
+- **When** the component renders
+- **Then** it renders no box, only `labels.recaptchaNotice` ("Diese Website ist durch reCAPTCHA
+  geschützt."), the badge stays visible unless `hideBadge` is set, and a shown v3 captcha keeps a
+  token that is renewed before it expires
+- **Because** Google allows hiding the badge only when the user flow shows the reCAPTCHA branding
+- verify: unit

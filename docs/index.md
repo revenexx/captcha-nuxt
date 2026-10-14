@@ -5,7 +5,7 @@ composable, `verifyCaptcha()`, the providers, consent, rider mode and security n
 
 | Page | What it covers |
 | --- | --- |
-| [Cookbook](recipes.md) | a contact form, invisible forms, a per-page provider, Turnstile behind consent, a self-hosted Cap, rider mode, a custom provider, tests with the `test` provider |
+| [Cookbook](recipes.md) | a contact form, invisible forms, a per-page provider, Turnstile, hCaptcha or reCAPTCHA behind consent, reCAPTCHA v3 without the badge, a self-hosted Cap, rider mode, a custom provider, tests with the `test` provider |
 | [Theming](theming.md) | CSS variables, classes and data attributes, the slot, dark mode, accessibility |
 | [Contract](contract.md) | the normative part: the token envelope, `CaptchaResult`, the provider interface, the Rider API, failure modes |
 | [Acceptance criteria](../specs/module-contract.md) | what the module promises, each criterion bound to a test |
