@@ -35,7 +35,7 @@ Set them on `.rvx-captcha` or any ancestor. Dark-mode values apply under
 | `.rvx-captcha__check` | the checkbox button (`role="checkbox"`, `aria-checked`, `aria-busy`) |
 | `.rvx-captcha__mark` | the square; holds `.rvx-captcha__ring` (progress) or `.rvx-captcha__icon` (check) |
 | `.rvx-captcha__label` | the state text |
-| `.rvx-captcha__brand` | the brand line (revenexx only) |
+| `.rvx-captcha__brand` | the brand line, for a provider with `meta.brand: true` |
 | `.rvx-captcha__widget` | the container a widget provider renders into |
 | `.rvx-captcha__notice` | consent-required / unavailable notice |
 | `[data-captcha-status]` | the visually hidden live region |

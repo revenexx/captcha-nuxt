@@ -324,7 +324,7 @@ It never throws. Decide on `success`, and use `errors` for logging and messages:
 
 | Provider | UI | Consent | Region | Invisible | Score | Action binding | Server needs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `revenexx` | own box + brand line | none | EU (operated by revenexx) | ✓ | — | — (checked against the expected one) | `NUXT_CAPTCHA_CAP_SECRET` (config mode) |
+| `revenexx` | own box | none | EU (operated by revenexx) | ✓ | — | — (checked against the expected one) | `NUXT_CAPTCHA_CAP_SECRET` (config mode) |
 | `cap` | own box | none | self-hosted | ✓ | — | — | `NUXT_CAPTCHA_CAP_SECRET` |
 | `friendly` | Friendly Captcha widget | none | EU (`region: 'eu'`) or global | — | — | — | `NUXT_CAPTCHA_FRIENDLY_API_KEY` |
 | `turnstile` | Turnstile widget | **required** (`cloudflare-turnstile`) | global (Cloudflare) | ✓ | — | ✓ | `NUXT_CAPTCHA_TURNSTILE_SECRET` |
@@ -339,8 +339,8 @@ the module points Cap's solver at the instance's own wasm files
 a CDN; run Cap standalone with `ENABLE_ASSETS_SERVER=true`. Cap's own `<cap-widget>` is not
 shown, because its UI always links to trycap.dev; the module draws its own box instead. The
 server posts `{ secret, response }` to `<verify endpoint or endpoint>/<siteKey>/siteverify`. A
-Cap token is valid once. `revenexx` is `cap` with `https://captcha.revenexx.com` and the brand
-line.
+Cap token is valid once. `revenexx` is `cap` with `https://captcha.revenexx.com`. Neither shows a brand line; a
+custom provider can ask for one with `meta.brand: true` (text: `labels.brand`).
 
 **friendly.** Friendly Captcha v2 through `@friendlycaptcha/sdk`, imported on demand. The server
 posts to `https://{eu|global}.frcapi.com/api/v2/captcha/siteverify` with `X-API-Key`. Use

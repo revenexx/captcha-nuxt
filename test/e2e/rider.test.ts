@@ -50,7 +50,7 @@ describe('rider mode', () => {
     const before = calls.filter(c => c.method === 'GET').length
     const html = await $fetch<string>('/')
     expect(html).toContain('data-captcha-provider="revenexx"')
-    expect(html).toContain('RevenexxCaptcha')
+    expect(html).not.toContain('class="rvx-captcha__brand"')
     expect(html).toContain('rvx-captcha-config')
     const second = await $fetch<string>('/')
     expect(second).toContain('data-captcha-provider="revenexx"')

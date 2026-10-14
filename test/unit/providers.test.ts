@@ -50,8 +50,8 @@ describe('cap and revenexx siteverify', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('is the same provider with and without the brand line', () => {
-    expect(revenexx.meta).toMatchObject({ ui: 'own', brand: true, consent: 'none', invisible: true })
+  it('is the same provider, neither with a brand line', () => {
+    expect(revenexx.meta).toMatchObject({ ui: 'own', brand: false, consent: 'none', invisible: true })
     expect(cap.meta).toMatchObject({ ui: 'own', brand: false, consent: 'none', invisible: true })
   })
 })
