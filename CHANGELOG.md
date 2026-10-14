@@ -1,0 +1,1 @@
+# @revenexx/captcha-nuxt
