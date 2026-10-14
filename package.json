@@ -1,6 +1,6 @@
 {
   "name": "@revenexx/captcha-nuxt",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "One captcha component and one server function for Nuxt, with the provider switched by configuration: the privacy-friendly RevenexxCaptcha (built on Cap), any self-hosted Cap, Friendly Captcha, Cloudflare Turnstile or your own provider. Consent-aware, with a fallback, and optionally configured per tenant by the revenexx platform.",
   "keywords": [
     "nuxt",
