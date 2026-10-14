@@ -1,5 +1,11 @@
 # @revenexx/captcha-nuxt
 
+## 0.1.1
+
+### Patch Changes
+
+- 8011a04: Published from CI with npm provenance, so the package's origin can be verified with `npm audit signatures`. Nothing changes in the module.
+
 ## 0.1.0
 
 ### Minor Changes
