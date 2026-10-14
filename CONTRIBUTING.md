@@ -55,6 +55,13 @@ provenance through npm OIDC trusted publishing, so there is no `NPM_TOKEN`. The 
 publisher binding is keyed to this repository **and the workflow filename**, so
 `release.yml` keeps its name.
 
+npm binds a trusted publisher to a package that exists, so the very first version of a new
+package goes up by hand, and the binding stays *pending* until a version comes through
+`release.yml`. Publishing by hand needs `--provenance=false`, because `publishConfig.provenance`
+is only satisfiable inside GitHub Actions; npm may then hold the version as *staged* until it
+is approved on npmjs.com. 0.1.0 went that way; 0.1.1 was the first release through the
+workflow.
+
 A peer-dependency range (`nuxt`, `@nuxt/scripts`) is part of what the package promises. Moving
 it needs a changeset even when nothing else changes.
 
