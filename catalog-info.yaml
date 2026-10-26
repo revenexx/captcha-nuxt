@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: "captcha-nuxt"
+  description: "Nuxt module with one captcha component and one server check; the provider (RevenexxCaptcha/Cap, Friendly Captcha, Cloudflare Turnstile and others) is configuration."
+  annotations:
+    github.com/project-slug: revenexx/captcha-nuxt
+spec:
+  type: library
+  owner: group:default/frontend-engineering
+  system: revenue-cloud
+  lifecycle: experimental
