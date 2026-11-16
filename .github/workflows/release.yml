@@ -53,7 +53,7 @@ jobs:
       - uses: changesets/action@v2
         with:
           # `pnpm run version` (changeset version) — not pnpm's built-in version.
-          version: pnpm run version
-          publish: pnpm run release
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          version-script: pnpm run version
+          publish-script: pnpm run release
+          # v2 takes the token only as this input; GITHUB_TOKEN in env is ignored.
+          github-token: ${{ steps.app-token.outputs.token }}
