@@ -38,11 +38,11 @@ jobs:
         with:
           app-id: ${{ secrets.REVENEXX_RELEASEBOT_APP_ID }}
           private-key: ${{ secrets.REVENEXX_RELEASEBOT_APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -50,10 +50,10 @@ jobs:
       # bundled with Node 22). pnpm publish shells out to this npm for auth.
       - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
-      - uses: changesets/action@v1
+      - uses: changesets/action@v2
         with:
           # `pnpm run version` (changeset version) — not pnpm's built-in version.
-          version: pnpm run version
-          publish: pnpm run release
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          version-script: pnpm run version
+          publish-script: pnpm run release
+          # v2 takes the token only as this input; GITHUB_TOKEN in env is ignored.
+          github-token: ${{ steps.app-token.outputs.token }}
