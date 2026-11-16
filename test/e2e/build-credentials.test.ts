@@ -23,7 +23,9 @@ const CANARIES = {
 
 async function files(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
-  const nested = await Promise.all(entries.map(e => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)])))
+  // Nitro links each traced package to its copy under node_modules/.nitro, which
+  // the walk reaches on its own: a link is skipped, not read as a file.
+  const nested = await Promise.all(entries.filter(e => !e.isSymbolicLink()).map(e => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)])))
   return nested.flat()
 }
 
