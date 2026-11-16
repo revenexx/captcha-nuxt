@@ -11,6 +11,11 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     ignore:
+      # typescript-eslint does not support TypeScript 7 yet ("typescript-eslint
+      # does not support TS 7.0" turned the npm group red, 2026-11-17). Out
+      # again once a typescript-eslint release supports it.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
       # The types follow the Node release the image runs (22), not ahead of it.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
